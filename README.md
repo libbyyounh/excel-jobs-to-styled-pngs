@@ -62,7 +62,7 @@ source .venv/bin/activate
 pip install -r excel-jobs-to-styled-pngs/requirements.txt
 ```
 
-然后按顺序跑：
+然后按顺序跑（默认 zero-config，三份脚本都会自动探测列/列名/产物文件，无需改动）：
 
 ```bash
 python3 excel-jobs-to-styled-pngs/clean.py  path/to/recruitment.xlsx
@@ -70,4 +70,4 @@ python3 excel-jobs-to-styled-pngs/render.py path/to/recruitment_cleaned.xlsx
 python3 excel-jobs-to-styled-pngs/crop.py
 ```
 
-每份新 Excel 需要先改 `clean.py` / `render.py` / `crop.py` 顶部的 `CONFIGS` / `TARGETS`，详见 SKILL.md。
+`clean.py` 会按列名自动识别表头和列号；`render.py` 会按 sheet 名自动派生输出 PNG；`crop.py` 会自动 glob 当前目录的 `c_*.png`。仅当 auto-detect 失败（列名不在白名单 / 想强制输出文件名 / 改了样式参考图）时，再去 `clean.py` / `render.py` / `crop.py` 顶部填 `CONFIGS` / `TARGETS`，详见 SKILL.md。
