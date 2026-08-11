@@ -31,7 +31,7 @@ npx skills add -g -y https://github.com/libbyyounh/excel-jobs-to-styled-pngs/tre
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r excel-jobs-to-styled-pngs/requirements.txt
 ```
 
 然后按顺序跑：
