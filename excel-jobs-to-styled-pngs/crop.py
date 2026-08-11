@@ -1,17 +1,31 @@
 #!/usr/bin/env python3
-"""把 generate_c.py 生成的大图按灰色分隔线切成一组小图。
+"""Stage 2 — Cut a long rendered PNG into per-card slices along gray separator lines.
 
-对每个 (prefix, png) 跑一遍，输出 prefix_1.png / prefix_2.png / ...。
+Pure Pillow, no numpy (PEP 668 blocks pip install on managed Python).
 
-只依赖 Pillow（避免 PEP 668 拦下 numpy 安装）。
+Usage:
+    python3 crop.py                          # auto-discover c_*.png in CWD
+    python3 crop.py                          # set TARGETS below to override
 """
+import glob
+import re
 from PIL import Image
 
-# (basename without .png, full png path)
-TARGETS = [
-    ('c_gzh',  'c_gzh.png'),
-    ('c_zpxq', 'c_zpxq.png'),
-]
+# Manual override. Leave as [] to auto-discover every c_*.png in the current directory.
+# Format: (prefix_without_underscore_number, full_png_path)
+TARGETS = []
+
+# Pattern for an already-sliced file (e.g. c_0714_3.png) — skip these on auto-discovery.
+SLICED_PATTERN = re.compile(r'_\d+\.png$')
+
+
+def auto_discover():
+    """Yield (prefix, png_path) for every c_*.png in CWD that isn't already a slice."""
+    for path in sorted(glob.glob('c_*.png')):
+        if SLICED_PATTERN.search(path):
+            continue
+        prefix = path[:-4]  # strip ".png"
+        yield (prefix, path)
 
 
 def crop_one(src, prefix):
@@ -51,7 +65,14 @@ def crop_one(src, prefix):
 
 
 def main():
-    for prefix, src in TARGETS:
+    if TARGETS:
+        work = list(TARGETS)
+    else:
+        work = list(auto_discover())
+        if not work:
+            print('  no c_*.png found in CWD; set TARGETS to override')
+            return
+    for prefix, src in work:
         crop_one(src, prefix)
 
 

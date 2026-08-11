@@ -47,7 +47,9 @@ If either is missing, ask. Do not start render without confirming both.
 
 The cleaning stage produces a **tidy xlsx** with exactly four columns in this order: `序号, 公司, 岗位, 薪酬`. All subsequent stages assume this schema. Cleaning also writes a `*_clean_report.txt` listing every dropped row and why — read this before render to catch silent surprises.
 
-Edit `CONFIGS` at the top of `clean.py` to match your file:
+**Default (zero-config)**: leave `CONFIGS = []` at the top of `clean.py`. The script scans every sheet in the workbook, finds the row whose first cell is `"序号"` (= header row), then locates the company / job / salary columns by matching common header strings (`公司名称 / 所属公司 / 公司`, `岗位名称 / 岗位`, `薪资范围 / 薪酬范围 / 薪酬 / 薪资`). Sheets that don't match (e.g. a 字典项 sheet) are skipped with a warning.
+
+**Manual override**: fill `CONFIGS` with explicit tuples if auto-detection fails on a sheet:
 
 ```python
 # (sheet_name, min_data_row, company_col, job_col, salary_col)
@@ -85,7 +87,9 @@ python3 clean.py path/to/recruitment.xlsx
 
 Reads `*_cleaned.xlsx` (schema fixed by clean.py), draws a designed long image, writes one PNG per sheet.
 
-**Edit `TARGETS` in render.py** to point at your sheets:
+**Default (zero-config)**: leave `TARGETS = []` at the top of `render.py`. The script processes every sheet in the cleaned xlsx and derives the output filename from the sheet name (`公众号最新版` → `c_公众号最新版.png`). Special characters in sheet names (`/\:*?"<>|.` and whitespace) are sanitized to underscores.
+
+**Manual override**: set `TARGETS` to map specific sheets to specific output filenames:
 
 ```python
 TARGETS = [
@@ -172,7 +176,9 @@ Then:
 
 **Expected yield**: N−1 separator lines for N cards. If you get many more (false positives from text bleeding into the gray range), raise the threshold to 80% or render the separator more saturated (e.g. `(180,180,180)`).
 
-Edit `TARGETS` in `crop.py` to match render.py's output:
+**Default (zero-config)**: leave `TARGETS = []` at the top of `crop.py`. The script globs every `c_*.png` in the current directory (skipping files that already look like slices, e.g. `c_foo_3.png`) and processes them automatically.
+
+**Manual override**: set `TARGETS` to process specific files:
 
 ```python
 TARGETS = [
@@ -194,23 +200,42 @@ Three scripts are bundled with this skill, in the same directory as `SKILL.md`:
 - `render.py` — Stage 1 (cleaned xlsx → long PNG)
 - `crop.py` — Stage 2 (long PNG → per-company slices)
 
-To use on a new Excel: copy the whole skill directory somewhere, drop the Excel in, edit the `CONFIGS` in `clean.py` and `TARGETS` in `render.py` / `crop.py`, then run all three stages in order. The visual spec constants in `render.py` are at the top — change those for a different style reference.
+**Default usage is zero-config** — `CONFIGS = []` in `clean.py`, `TARGETS = []` in both `render.py` and `crop.py`. The scripts auto-detect the Excel schema and auto-discover rendered PNGs.
+
+**Typical workflow for a new Excel** (zero edits required):
+
+```bash
+cp /path/to/skill/{clean.py,render.py,crop.py} working_dir/
+cp your_recruitment.xlsx working_dir/
+cd working_dir
+python3 clean.py your_recruitment.xlsx
+python3 render.py your_recruitment_cleaned.xlsx
+python3 crop.py
+```
+
+**When you need to override** (auto-detection fails, or you want a different style):
+
+- Edit `CONFIGS` in `clean.py` (column indices per sheet) — only when auto-detection picks the wrong column
+- Edit the "Visual spec" constants at the top of `render.py` (colors, sizes, layout) — only when matching a non-default style reference
+- Edit `TARGETS` in `render.py` / `crop.py` (sheet → filename mapping) — only when you want explicit control over output names
 
 ## Common mistakes
 
 | Symptom | Cause / Fix |
 |---|---|
-| Output shows `1`, `2`, `3` as companies | Column index wrong in clean.py CONFIGS. Dump first 3 rows and verify absolute index |
-| Clean report shows `kept=0` | All rows dropped — usually wrong `min_row` or wrong salary column |
-| 政策 rows appear in output | `NOISE_KEYWORDS` in clean.py doesn't cover this dataset. Add the keyword and re-run |
-| First company missing | Hardcoded `rows[2:]` in render.py — should be `min_row=2` already, no manual slice. The cleaned file already has the header removed |
+| `clean.py` skips a sheet with "could not auto-detect header" | Sheet doesn't have a `"序号"` cell, or its 公司 / 岗位 / 薪酬 columns use unrecognized header strings. Add them to `COMPANY_HEADERS` / `JOB_HEADERS` / `SALARY_HEADERS` in `clean.py`, or add a manual `CONFIGS` entry |
+| Output shows `1`, `2`, `3` as companies | Auto-detection picked the wrong salary column (some files have multiple 招聘人数 columns). Add a manual `CONFIGS` entry with the correct salary index |
+| Clean report shows `kept=0` | All rows dropped — usually wrong `min_row` or wrong salary column. Add a manual `CONFIGS` entry |
+| 政策 rows appear in output | `NOISE_KEYWORDS` in `clean.py` doesn't cover this dataset. Add the keyword and re-run |
+| Sheet name with `.` becomes `c_7_14岗位.png` | The `.` is sanitized to `_` in render.py's `safe_filename`. Functional but ugly — add a manual `TARGETS` entry to control the output name |
+| crop.py finds nothing | No `c_*.png` in the current directory. Either run `render.py` first, or set `TARGETS` manually with absolute paths |
+| Crop re-processes already-sliced files | The slice pattern (`_*N*.png`) only filters numbers at the END. If your sheet name ends in a digit (e.g. `c_2.png`), name slices differently or use `TARGETS` |
 | Company name overflows the badge | Wrap not triggered — long company. Verify `WIDTH - margins - BADGE_W - 24` is positive |
-| Chinese text → boxes | Font is not CJK. Probe the fallback chain in render.py |
-| `ModuleNotFoundError: numpy` | crop.py should be pure Pillow — see Stage 2 above |
+| Chinese text → boxes | Font is not CJK. Probe the fallback chain in `render.py` |
+| `ModuleNotFoundError: numpy` | `crop.py` should be pure Pillow — see Stage 2 above |
 | One tall unreadable image | Skipped Stage 2 — always crop, slices are what get inserted into slides |
 | `面议` rendered as `面议元/月` | Don't fabricate the suffix — render the cell as-is |
-| Wrong number of slices (e.g. 32 instead of 18) | Separator detection threshold too low. Raise to 80% in crop.py |
-| Hardcoded sheet name breaks on new file | Use the `CONFIGS` / `TARGETS` lists — same workbook often has multiple sheet layouts |
+| Wrong number of slices (e.g. 32 instead of 18) | Separator detection threshold too low. Raise to 80% in `crop.py` |
 | Huge empty space at bottom of canvas | Card header height summed (`BADGE_H + COMPANY_LINE_H * lines`) instead of `max(...)` — see Visual spec |
 | Salary overlaps long job names | Salary anchored to a fixed column. Use `job_bbox.right + 40` instead — see Visual spec |
 | Skipped clean.py → noisy output | Cleaning is a hard prerequisite. Run it first, read the report, THEN render |

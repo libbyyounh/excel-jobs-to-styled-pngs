@@ -3,25 +3,26 @@
 
 Input : <stem>_cleaned.xlsx  (output of clean.py — already filtered, no section headers,
         no policy noise, no empty rows; columns are exactly 序号/公司/岗位/薪酬 in that order)
-Output: {prefix}.png
+Output: one or more PNG files
 
 If you have a *raw* Excel, run `clean.py` first. This script does no data filtering.
 
 To use a different style, change the constants in the "Visual spec" section below.
 """
 import openpyxl
+import re
 import sys
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-# Default path; override with the first CLI arg.
-DEFAULT_XLSX = '岗位总表-20260812_cleaned.xlsx'
+# (sheet_name, output_png). Leave as [] to render every sheet in the workbook with an
+# auto-derived output filename (c_{sanitized_sheet_name}.png).
+TARGETS = []
 
-# (sheet_name, output_png)
-TARGETS = [
-    ('公众号最新版', 'c_gzh.png'),
-    ('招聘详情',    'c_zpxq.png'),
-]
+
+def safe_filename(sheet_name):
+    """Sanitize a sheet name for use as a PNG filename."""
+    return re.sub(r'[\\/:*?"<>|.\s]+', '_', sheet_name).strip('_') or 'sheet'
 
 # --- Visual spec (default teal-badge card) ---
 # Override these if the user supplies a different style reference.
@@ -170,11 +171,18 @@ def render(sheet_name, output_png, fonts, xlsx_path):
 
 
 def main():
-    xlsx = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(DEFAULT_XLSX)
+    if len(sys.argv) < 2:
+        raise SystemExit('usage: render.py <cleaned.xlsx>')
+    xlsx = Path(sys.argv[1])
     if not xlsx.exists():
         raise SystemExit(f'Cleaned xlsx not found: {xlsx}\nRun clean.py first.')
     fonts = load_fonts()
-    for sheet_name, out_png in TARGETS:
+    if TARGETS:
+        work = list(TARGETS)
+    else:
+        wb = openpyxl.load_workbook(xlsx, data_only=True)
+        work = [(name, f'c_{safe_filename(name)}.png') for name in wb.sheetnames]
+    for sheet_name, out_png in work:
         render(sheet_name, out_png, fonts, xlsx)
 
 
